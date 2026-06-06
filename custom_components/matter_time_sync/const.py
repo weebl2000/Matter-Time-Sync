@@ -4,6 +4,10 @@ from homeassistant.const import Platform
 
 DOMAIN = "matter_time_sync"
 
+# Config entry schema version. Bump when the stored `data` shape changes;
+# async_migrate_entry in __init__.py handles in-place upgrades.
+CONFIG_VERSION = 3
+
 # Platforms
 PLATFORMS: list[Platform] = [Platform.BUTTON]
 

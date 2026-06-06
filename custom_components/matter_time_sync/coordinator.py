@@ -120,6 +120,14 @@ class MatterTimeSyncCoordinator:
         """Return True if connected to Matter Server."""
         return self._connected and self._ws is not None and not self._ws.closed
 
+    def owns_node(self, node_id: int) -> bool:
+        """Return True if this coordinator has discovered the given node.
+
+        Used to route sync_time service calls to the correct instance when
+        multiple Matter Time Sync entries are configured.
+        """
+        return any(n.get("node_id") == node_id for n in self._nodes_cache)
+
     # ------------------------------------------------------------------
     # Connection management
     # ------------------------------------------------------------------
@@ -298,8 +306,16 @@ class MatterTimeSyncCoordinator:
             return response, False
 
         except asyncio.TimeoutError:
-            _LOGGER.error("Timeout waiting for response to %s", command)
-            return None, False
+            # A silently dropped (half-open) socket surfaces as a timeout rather
+            # than a "closed" error. Mark the connection dead and signal a retry
+            # so the caller reconnects once before giving up. All commands we
+            # send are idempotent, so re-sending after a reconnect is safe.
+            _LOGGER.warning(
+                "Timeout waiting for response to %s; reconnecting and retrying once",
+                command,
+            )
+            self._connected = False
+            return None, True
         except Exception as err:
             err_str = str(err).lower()
             if "closing" in err_str or "closed" in err_str:
@@ -527,11 +543,15 @@ class MatterTimeSyncCoordinator:
             async with lock:
                 return await self._do_sync_time(node_id, endpoint)
 
+        # Budget must comfortably exceed the worst-case for the 3-command
+        # sequence (3 x 10s) plus a single reconnect+retry on one command,
+        # otherwise the outer timeout can cancel the sequence mid-way and leave
+        # the device with a new offset but a stale clock.
         try:
-            return await asyncio.wait_for(_acquire_and_sync(), timeout=20)
+            return await asyncio.wait_for(_acquire_and_sync(), timeout=40)
         except asyncio.TimeoutError:
             _LOGGER.error(
-                "Timeout syncing node %s (exceeded 20s)",
+                "Timeout syncing node %s (exceeded 40s)",
                 node_id,
             )
             return False

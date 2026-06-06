@@ -23,6 +23,7 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     DOMAIN,
+    CONFIG_VERSION,
     CONF_WS_URL,
     CONF_TIMEZONE,
     CONF_DEVICE_FILTER,
@@ -145,7 +146,7 @@ def get_filter_target_options() -> list[str]:
 class MatterTimeSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Matter Time Sync."""
 
-    VERSION = 3  # Bumped version for filter_target option
+    VERSION = CONFIG_VERSION  # Bumped to 3 for filter_target option
 
     def __init__(self) -> None:
         """Initialize the config flow."""

@@ -12,6 +12,7 @@ import homeassistant.helpers.config_validation as cv
 
 from .const import (
     DOMAIN,
+    CONFIG_VERSION,
     SERVICE_SYNC_TIME,
     SERVICE_SYNC_ALL,
     SERVICE_REFRESH_DEVICES,
@@ -40,6 +41,32 @@ SYNC_TIME_SCHEMA = vol.Schema(
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the component via YAML (stub)."""
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate an old config entry to the current version.
+
+    The stored ``data`` shape has stayed backward-compatible (every read uses
+    ``.get(key, DEFAULT)``), so migration is just a version bump. This lets
+    in-place HACS updates work without removing and re-adding the integration.
+    """
+    if entry.version > CONFIG_VERSION:
+        # Entry was created by a newer version of the integration — we can't
+        # safely downgrade its schema.
+        _LOGGER.error(
+            "Config entry version %s is newer than supported version %s",
+            entry.version,
+            CONFIG_VERSION,
+        )
+        return False
+
+    if entry.version < CONFIG_VERSION:
+        hass.config_entries.async_update_entry(entry, version=CONFIG_VERSION)
+        _LOGGER.info(
+            "Migrated Matter Time Sync config entry to version %s", CONFIG_VERSION
+        )
+
     return True
 
 
@@ -123,13 +150,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         node_id = call.data["node_id"]
         endpoint = call.data.get("endpoint")
 
-        for eid, edata in hass.data[DOMAIN].items():
-            coord = edata.get("coordinator")
-            if coord:
-                await coord.async_sync_time(node_id, endpoint)
-                return
+        coordinators = [
+            edata["coordinator"]
+            for edata in hass.data[DOMAIN].values()
+            if isinstance(edata, dict) and edata.get("coordinator")
+        ]
+        if not coordinators:
+            _LOGGER.error("No Matter Time Sync coordinator found for sync_time")
+            return
 
-        _LOGGER.error("No Matter Time Sync coordinator found for sync_time")
+        # Route to the instance that actually owns the node (multi-instance),
+        # falling back to the first coordinator if none claim it.
+        coord = next(
+            (c for c in coordinators if c.owns_node(node_id)),
+            coordinators[0],
+        )
+        await coord.async_sync_time(node_id, endpoint)
 
     async def handle_sync_all(call: ServiceCall) -> None:
         """Handle the sync_all service call."""

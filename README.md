@@ -1,6 +1,6 @@
 # Matter Time Sync for Home Assistant
 
-![Version](https://img.shields.io/badge/version-2.2.2-blue)
+![Version](https://img.shields.io/badge/version-2.2.3-blue)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-Custom%20Component-orange)
 
 A native Home Assistant custom component to synchronize **Time** and **Timezone** on Matter devices that support the Time Synchronization cluster.
@@ -242,6 +242,17 @@ logger:
 ---
 
 ## 📋 Version History
+
+### v2.2.3
+✨ New Features
+- In-place updates: added config entry migration so future HACS updates no longer require removing and reinstalling the integration
+
+🐛 Bug Fixes
+- `sync_time` service now routes to the correct instance when multiple integrations are configured (previously always used the first instance)
+
+🛠️ Improvements
+- More resilient WebSocket handling: commands now reconnect and retry once on a silent (half-open) socket timeout
+- Increased the per-device sync timeout (20s → 40s) so the full Time/Timezone/DST command sequence can't be cut off mid-way
 
 ### v2.2.2
 🐛 Bug Fixes
